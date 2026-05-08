@@ -8,12 +8,12 @@ version = "0.1.0"
 description = "Plotting functions for scientific detector testing"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = { text = "MIT" }
 authors = [
-    {name = "Peter Doherty", email = "peter.doherty@cfa.harvard.edu"}
+    { name = "Peter Doherty", email = "peter.doherty@cfa.harvard.edu" }
 ]
 
-keywords = ["detetor", "characterization", "ccd", "cmos", "calibration", "astronomy"]
+keywords = ["detector", "characterization", "ccd", "cmos", "calibration", "astronomy"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -23,16 +23,11 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
+
 dependencies = [
     "numpy>=1.23.0",
     "matplotlib>=3.3.0",
 ]
-
-[project.urls]
-# Homepage = "https://github.com/yourusername/camera_characterization"
-# Documentation = "https://camera_characterization.readthedocs.io"
-# Repository = "https://github.com/yourusername/camera_characterization"
-# "Bug Tracker" = "https://github.com/yourusername/camera_characterization/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -48,11 +43,11 @@ docs = [
 ]
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["camera_characterization*"]
+include = ["detector_plots*"]
 
 [tool.pytest.ini_options]
 testpaths = [
@@ -64,7 +59,7 @@ python_functions = ["test_*"]
 addopts = [
     "--strict-markers",
     "--strict-config",
-    "--cov=fits_tools",
+    "--cov=detector_plots",
     "--cov-report=term-missing",
 ]
 
@@ -83,7 +78,7 @@ select = [
     "UP",  # pyupgrade
 ]
 ignore = [
-    "E501",  # line too long 
+    "E501",  # line too long
     "B008",  # do not perform function calls in argument defaults
 ]
 
@@ -96,11 +91,3 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "camera_characterization.*"
-ignore_missing_imports = true
-
-
-
-

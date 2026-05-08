@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# build / dist
+build/
+dist/
+*.egg-info/
+
+# editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# archives / temporary
+*.zip
+archive/

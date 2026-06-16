@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+#  Copyright (C) 2026
+#  Smithsonian Astrophysical Observatory, Cambridge, MA, USA
+#  For conditions of distribution and use, see copyright notice in "copyright"
 """
 Charge Transfer Efficiency (CTE) and EPER plot recipes.
 
@@ -792,3 +795,508 @@ def plot_eper_trailing_detail(
     )
     plt.close("all")
     logger.debug("EPER trailing detail plot saved: %s", output_path)
+
+
+def plot_exponential_profile_fit(
+    trailing_profile: list[float],
+    fit_profile: list[float] | None = None,
+    profile_sem: list[float] | None = None,
+    fit_included_mask: list[bool] | None = None,
+    f: float | None = None,
+    f_uncertainty: float | None = None,
+    q_pocket: float | None = None,
+    r_squared: float | None = None,
+    signal_level: float | None = None,
+    direction: str = "Serial",
+    title: str = "Trailing Profile — Exponential Fit",
+    output_path: str = "eper_exp_fit.png",
+    header_info: dict[str, Any] | None = None,
+    hdu: int | str | None = None,
+    signal_unit: str = "ADU",
+    **kwargs: Any,
+) -> None:
+    """
+    Plot a single serial trailing profile with an exponential decay overlay.
+
+    The data are shown as a step plot (one flat per pixel).  When *fit_profile*
+    is supplied the fitted model is drawn as a dashed line.  Pixels excluded
+    from the fit (via *fit_included_mask*) are shown as open markers.
+
+    Parameters
+    ----------
+    trailing_profile : list of float
+        Baseline-subtracted deferred charge per overscan pixel.
+        Element 0 is overscan pixel 1 (first pixel after the active area).
+        Must already be in *signal_unit*.
+    fit_profile : list of float, optional
+        Exponential fit evaluated at the same pixel positions.
+        Must already be in *signal_unit*.
+    profile_sem : list of float, optional
+        Standard error of the mean per pixel.  Drawn as error bars when
+        provided.
+    fit_included_mask : list of bool, optional
+        Boolean mask (same length as *trailing_profile*).  ``True`` means
+        the pixel was included in the exponential fit; ``False`` means it
+        was excluded.  Excluded pixels are shown as open circles.
+    f : float, optional
+        Per-cycle transfer fraction from the fit (shown in annotation).
+    f_uncertainty : float, optional
+        Uncertainty on *f* (1-σ).
+    q_pocket : float, optional
+        Fitted barrier pocket charge in *signal_unit* (shown in annotation).
+    r_squared : float, optional
+        Goodness of fit R² (shown in annotation).
+    signal_level : float, optional
+        Mean active-area signal level, in *signal_unit* (annotation only).
+    direction : {"Serial", "Parallel"}
+        Readout direction; controls axis labelling.
+    title : str, optional
+        Plot title.
+    output_path : str, optional
+        Destination file path.
+    header_info : dict, optional
+        Metadata for the subtitle.
+    hdu : int or str, optional
+        FITS extension identifier.
+    signal_unit : str, optional
+        Unit label.  Default ``"ADU"``.
+    **kwargs
+        Forwarded to :func:`._helpers._parse_plot_kwargs`.
+    """
+    _ensure_parent_dir(output_path)
+
+    header_info = header_info or {}
+    title1, title2 = _build_subtitle(header_info, hdu)
+
+    figure, axes_extra, legend, grid, colorbar, overwrite, show, remaining = (
+        _parse_plot_kwargs(kwargs)
+    )
+    _warn_unused_kwargs(remaining, "plot_exponential_profile_fit")
+    figure.setdefault("size", (10, 6))
+
+    pixel_label = "Column" if direction.lower() == "serial" else "Row"
+    trail = np.asarray(trailing_profile)
+    n = len(trail)
+    x = np.arange(1, n + 1)
+
+    included = (
+        np.asarray(fit_included_mask, dtype=bool)
+        if fit_included_mask is not None
+        else np.ones(n, dtype=bool)
+    )
+
+    datasets: list[dict[str, Any]] = []
+
+    # Included pixels — filled markers
+    if included.any():
+        datasets.append(
+            {
+                "type":      "step",
+                "x":         x,
+                "y":         trail,
+                "color":     "steelblue",
+                "linewidth": 1.5,
+                "label":     "Trailing profile",
+                "zorder":    3,
+            }
+        )
+        if profile_sem is not None:
+            sem = np.asarray(profile_sem)
+            if len(sem) == n:
+                datasets.append(
+                    {
+                        "type":    "errorbar",
+                        "x":       x[included],
+                        "y":       trail[included],
+                        "yerr":    sem[included],
+                        "fmt":     "none",
+                        "color":   "steelblue",
+                        "capsize": 3,
+                        "alpha":   0.6,
+                        "zorder":  4,
+                    }
+                )
+
+    # Excluded pixels — open circles
+    if (~included).any():
+        datasets.append(
+            {
+                "type":            "scatter",
+                "x":               x[~included],
+                "y":               trail[~included],
+                "color":           "white",
+                "edgecolors":      "steelblue",
+                "linewidths":      1.2,
+                "label":           "Excluded from fit",
+                "zorder":          5,
+            }
+        )
+
+    # Fit overlay
+    if fit_profile is not None:
+        fp = np.asarray(fit_profile)
+        datasets.append(
+            {
+                "type":      "line",
+                "x":         x[:len(fp)],
+                "y":         fp[:n],
+                "color":     "coral",
+                "linestyle": "--",
+                "linewidth": 1.6,
+                "label":     "Exponential fit",
+                "zorder":    6,
+            }
+        )
+
+    # Zero reference
+    hlines: list[dict[str, Any]] = [
+        {
+            "y":          0.0,
+            "color":      "gray",
+            "linestyle":  ":",
+            "linewidth":  0.8,
+            "show_value": False,
+            "zorder":     1,
+        }
+    ]
+
+    # Annotation text
+    ann_parts: list[str] = []
+    if signal_level is not None:
+        ann_parts.append(f"Signal: {signal_level:.1f} {signal_unit}")
+    if f is not None:
+        f_str = f"f = {f:.4f}"
+        if f_uncertainty is not None:
+            f_str += f" ± {f_uncertainty:.4f}"
+        ann_parts.append(f_str)
+    if q_pocket is not None:
+        ann_parts.append(f"Q_pocket = {q_pocket:.2f} {signal_unit}")
+    if r_squared is not None:
+        ann_parts.append(f"R² = {r_squared:.4f}")
+    result1 = "\n".join(ann_parts) if ann_parts else None
+
+    axes: dict[str, Any] = {
+        "title":  _merge_title(title, title1, title2),
+        "xlabel": f"Overscan {pixel_label} (1 = first pixel after active area)",
+        "ylabel": f"Deferred charge ({signal_unit})",
+        "xlim":   (0.5, n + 0.5),
+        **axes_extra,
+    }
+
+    _PLOTGEN.plot(
+        output_path=output_path,
+        datasets=datasets,
+        horizontal_lines=hlines,
+        axes=axes,
+        figure=figure or None,
+        legend=legend or None,
+        grid=grid or None,
+        colorbar=colorbar or None,
+        text_boxes=_make_text_boxes(
+            result1=result1, result1_position="upper right"
+        ),
+        overwrite=overwrite,
+        show=show,
+    )
+    plt.close("all")
+    logger.debug("Exponential profile fit plot saved: %s", output_path)
+
+
+def plot_transfer_fraction_vs_signal(
+    signals: np.ndarray,
+    f_values: np.ndarray,
+    f_uncertainties: np.ndarray | None = None,
+    f0_estimate: float | None = None,
+    f0_source: str | None = None,
+    title: str = "Per-Cycle Transfer Fraction vs Signal",
+    output_path: str = "transfer_fraction_vs_signal.png",
+    header_info: dict[str, Any] | None = None,
+    hdu: int | str | None = None,
+    signal_unit: str = "ADU",
+    **kwargs: Any,
+) -> None:
+    """
+    Plot per-cycle charge transfer fraction *f* vs signal level.
+
+    *f* = 1 − (1 − CTE_per_cycle) is extracted from exponential fits to
+    the serial trailing profile.  At high signal space charge partially
+    compensates the barrier, so *f* → 1.  At low signal *f* → *f₀*, the
+    barrier-limited floor.
+
+    Parameters
+    ----------
+    signals : np.ndarray
+        Signal levels (one per EPER measurement).  Must be in *signal_unit*.
+    f_values : np.ndarray
+        Per-cycle transfer fraction *f* at each signal level.
+    f_uncertainties : np.ndarray, optional
+        1-σ uncertainties on *f*.  Drawn as error bars.
+    f0_estimate : float, optional
+        Low-signal limit of *f*, e.g. from Langmuir or linear Q_trail fit.
+        Drawn as a horizontal reference line.
+    f0_source : str, optional
+        Label for the *f₀* line (e.g. ``"Langmuir"``).
+    title : str, optional
+        Plot title.
+    output_path : str, optional
+        Destination file path.
+    header_info : dict, optional
+        Metadata for the subtitle.
+    hdu : int or str, optional
+        FITS extension identifier.
+    signal_unit : str, optional
+        Unit label.  Default ``"ADU"``.
+    **kwargs
+        Forwarded to :func:`._helpers._parse_plot_kwargs`.
+    """
+    _ensure_parent_dir(output_path)
+
+    header_info = header_info or {}
+    title1, title2 = _build_subtitle(header_info, hdu)
+
+    figure, axes_extra, legend, grid, colorbar, overwrite, show, remaining = (
+        _parse_plot_kwargs(kwargs)
+    )
+    _warn_unused_kwargs(remaining, "plot_transfer_fraction_vs_signal")
+    figure.setdefault("size", (10, 6))
+
+    s = np.asarray(signals)
+    fv = np.asarray(f_values)
+    valid = np.isfinite(s) & np.isfinite(fv)
+
+    datasets: list[dict[str, Any]] = []
+    if valid.any():
+        ds: dict[str, Any] = {
+            "type":      "line",
+            "x":         s[valid],
+            "y":         fv[valid],
+            "marker":    "o",
+            "linestyle": "-",
+            "color":     "steelblue",
+            "linewidth": 1.5,
+            "label":     r"$f(S)$ from exp. fit",
+            "zorder":    3,
+        }
+        datasets.append(ds)
+        if f_uncertainties is not None:
+            fu = np.asarray(f_uncertainties)[valid]
+            err_valid = np.isfinite(fu) & (fu > 0)
+            if err_valid.any():
+                datasets.append(
+                    {
+                        "type":    "errorbar",
+                        "x":       s[valid][err_valid],
+                        "y":       fv[valid][err_valid],
+                        "yerr":    fu[err_valid],
+                        "fmt":     "none",
+                        "color":   "steelblue",
+                        "capsize": 4,
+                        "alpha":   0.7,
+                        "zorder":  4,
+                    }
+                )
+
+    hlines: list[dict[str, Any]] = [
+        {
+            "y":          1.0,
+            "color":      "gray",
+            "linestyle":  "--",
+            "linewidth":  0.8,
+            "label":      "f = 1 (perfect CTE)",
+            "show_value": False,
+            "zorder":     1,
+        },
+    ]
+    if f0_estimate is not None:
+        src = f" ({f0_source})" if f0_source else ""
+        hlines.append(
+            {
+                "y":          f0_estimate,
+                "color":      "coral",
+                "linestyle":  ":",
+                "linewidth":  1.3,
+                "label":      f"$f_0$ = {f0_estimate:.4f}{src}",
+                "show_value": False,
+                "zorder":     2,
+            }
+        )
+
+    result_parts: list[str] = []
+    if valid.any():
+        result_parts.append(f"Mean f: {np.mean(fv[valid]):.4f}")
+    if f0_estimate is not None:
+        result_parts.append(f"f₀ ({f0_source or 'fit'}): {f0_estimate:.4f}")
+    result1 = "\n".join(result_parts) if result_parts else None
+
+    y_min = float(np.min(fv[valid])) - 0.05 if valid.any() else 0.0
+    axes: dict[str, Any] = {
+        "title":  _merge_title(title, title1, title2),
+        "xlabel": f"Signal ({signal_unit})",
+        "ylabel": r"Per-cycle transfer fraction $f$",
+        "ylim":   (max(0.0, y_min), 1.05),
+        **axes_extra,
+    }
+
+    _PLOTGEN.plot(
+        output_path=output_path,
+        datasets=datasets,
+        horizontal_lines=hlines,
+        axes=axes,
+        figure=figure or None,
+        legend={"loc": "lower right", **(legend or {})},
+        grid=grid or None,
+        colorbar=colorbar or None,
+        text_boxes=_make_text_boxes(
+            result1=result1, result1_position="upper right"
+        ),
+        overwrite=overwrite,
+        show=show,
+    )
+    plt.close("all")
+    logger.debug("Transfer fraction vs signal plot saved: %s", output_path)
+
+
+def plot_corrected_cti_comparison(
+    signals: np.ndarray,
+    cti_raw: np.ndarray,
+    cti_corrected: np.ndarray,
+    cti_barrier: np.ndarray | None = None,
+    title: str = "CTI: Raw vs Barrier-Corrected",
+    output_path: str = "corrected_cti_comparison.png",
+    header_info: dict[str, Any] | None = None,
+    hdu: int | str | None = None,
+    signal_unit: str = "ADU",
+    **kwargs: Any,
+) -> None:
+    """
+    Overlay raw EPER CTI, isolated barrier contribution, and corrected CTI.
+
+    Separating the barrier contribution from the EPER-measured CTI reveals
+    whether the residual corrected CTI is consistent with zero or whether a
+    true charge-transfer inefficiency remains.
+
+    Parameters
+    ----------
+    signals : np.ndarray
+        Signal levels (one per measurement).  Must be in *signal_unit*.
+    cti_raw : np.ndarray
+        Raw CTI from EPER (= Q_trail / (signal × n_transfers)).
+    cti_corrected : np.ndarray
+        Barrier-corrected CTI (= cti_raw − cti_barrier).  Non-positive
+        values are excluded from the log-scale view.
+    cti_barrier : np.ndarray, optional
+        Barrier contribution alone (= Q_trail_barrier / (signal × n_transfers)).
+    title : str, optional
+        Plot title.
+    output_path : str, optional
+        Destination file path.
+    header_info : dict, optional
+        Metadata for the subtitle.
+    hdu : int or str, optional
+        FITS extension identifier.
+    signal_unit : str, optional
+        Unit label.  Default ``"ADU"``.
+    **kwargs
+        Forwarded to :func:`._helpers._parse_plot_kwargs`.
+    """
+    _ensure_parent_dir(output_path)
+
+    header_info = header_info or {}
+    title1, title2 = _build_subtitle(header_info, hdu)
+
+    figure, axes_extra, legend, grid, colorbar, overwrite, show, remaining = (
+        _parse_plot_kwargs(kwargs)
+    )
+    _warn_unused_kwargs(remaining, "plot_corrected_cti_comparison")
+    figure.setdefault("size", (10, 6))
+
+    s = np.asarray(signals)
+    raw = np.asarray(cti_raw)
+    cor = np.asarray(cti_corrected)
+
+    datasets: list[dict[str, Any]] = []
+
+    raw_mask = np.isfinite(raw) & (raw > 0)
+    if raw_mask.any():
+        datasets.append(
+            {
+                "type":      "line",
+                "x":         s[raw_mask],
+                "y":         raw[raw_mask],
+                "marker":    "o",
+                "linestyle": "-",
+                "color":     "coral",
+                "linewidth": 1.5,
+                "label":     "Raw CTI (EPER)",
+                "zorder":    3,
+            }
+        )
+
+    if cti_barrier is not None:
+        bar = np.asarray(cti_barrier)
+        bar_mask = np.isfinite(bar) & (bar > 0)
+        if bar_mask.any():
+            datasets.append(
+                {
+                    "type":      "line",
+                    "x":         s[bar_mask],
+                    "y":         bar[bar_mask],
+                    "marker":    "s",
+                    "linestyle": "--",
+                    "color":     "goldenrod",
+                    "linewidth": 1.2,
+                    "label":     "Barrier contribution",
+                    "zorder":    2,
+                }
+            )
+
+    cor_mask = np.isfinite(cor) & (cor > 0)
+    if cor_mask.any():
+        datasets.append(
+            {
+                "type":      "line",
+                "x":         s[cor_mask],
+                "y":         cor[cor_mask],
+                "marker":    "^",
+                "linestyle": "-",
+                "color":     "steelblue",
+                "linewidth": 1.5,
+                "label":     "Corrected CTI",
+                "zorder":    4,
+            }
+        )
+
+    result_parts: list[str] = []
+    if raw_mask.any():
+        result_parts.append(f"Mean raw CTI: {np.mean(raw[raw_mask]):.2e}")
+    if cor_mask.any():
+        result_parts.append(f"Mean corrected CTI: {np.mean(cor[cor_mask]):.2e}")
+    if raw_mask.any() and cor_mask.any():
+        reduction = 1.0 - np.mean(cor[cor_mask]) / np.mean(raw[raw_mask])
+        result_parts.append(f"Barrier fraction: {reduction*100:.1f}%")
+    result1 = "\n".join(result_parts) if result_parts else None
+
+    axes: dict[str, Any] = {
+        "title":  _merge_title(title, title1, title2),
+        "xlabel": f"Signal ({signal_unit})",
+        "ylabel": "CTI per transfer",
+        "yscale": "log",
+        **axes_extra,
+    }
+
+    _PLOTGEN.plot(
+        output_path=output_path,
+        datasets=datasets,
+        axes=axes,
+        figure=figure or None,
+        legend={"loc": "upper right", **(legend or {})},
+        grid=grid or None,
+        colorbar=colorbar or None,
+        text_boxes=_make_text_boxes(
+            result1=result1, result1_position="lower left"
+        ),
+        overwrite=overwrite,
+        show=show,
+    )
+    plt.close("all")
+    logger.debug("Corrected CTI comparison plot saved: %s", output_path)

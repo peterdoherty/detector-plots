@@ -55,6 +55,7 @@ def plot_ptc(
     x_max: float | None = None,
     loglog: bool = False,
     show_reference_lines: bool = True,
+    data_was_binned: bool = True,
     **kwargs: Any,
 ) -> None:
     """
@@ -108,6 +109,15 @@ def plot_ptc(
     show_reference_lines : bool, optional
         If *True*, overlay shot-noise (and optionally read-noise)
         reference lines.
+    data_was_binned : bool, optional
+        Whether *fit_mean_signals*/*fit_variances* (and the excluded
+        arrays) were actually produced by binning the raw data, as opposed
+        to being the raw per-exposure points themselves (e.g. when the
+        caller requested more bins than there were data points, so no
+        binning occurred). Controls the legend labels for those two
+        series — "Binned Data (...)" when *True*, "Fit Points (...)" when
+        *False*. Default *True* preserves prior behavior for callers that
+        don't pass it.
     **kwargs
         Additional layout keywords forwarded to
         :func:`._helpers._parse_plot_kwargs`.
@@ -179,6 +189,9 @@ def plot_ptc(
         res_parts.append("Slope=1 → Shot noise")
     result1 = "\n".join(res_parts)
 
+    fit_label = "Binned Data (Fit)" if data_was_binned else "Fit Points"
+    excluded_label = "Binned Data (Excluded)" if data_was_binned else "Excluded Points"
+
     datasets: list[dict[str, Any]] = [
         {
             "type": "scatter", "x": all_x, "y": all_y,
@@ -188,7 +201,7 @@ def plot_ptc(
         {
             "type": "line", "x": fit_x, "y": fit_y,
             "marker": "o", "linestyle": "--", "linewidth": 1.5,
-            "color": "orange", "label": "Binned Data (Fit)", "zorder": 3,
+            "color": "orange", "label": fit_label, "zorder": 3,
         },
     ]
     if len(exc_x) > 0:
@@ -196,7 +209,7 @@ def plot_ptc(
             {
                 "type": "line", "x": exc_x, "y": exc_y,
                 "marker": "o", "linestyle": "", "color": "darkblue",
-                "label": "Binned Data (Excluded)", "zorder": 2,
+                "label": excluded_label, "zorder": 2,
             }
         )
 

@@ -52,6 +52,7 @@ def plot_variance_ratio(
     xlim: tuple[float, float] | None = None,
     show_unity_line: bool = True,
     show_signal_ranges: bool = True,
+    signal_range_markers_adu: tuple[float, float] = (100.0, 500.0),
     **kwargs: Any,
 ) -> None:
     """
@@ -93,8 +94,14 @@ def plot_variance_ratio(
     show_unity_line : bool, optional
         Overlay a horizontal line at ratio = 1.  Default *True*.
     show_signal_ranges : bool, optional
-        Overlay vertical reference lines at 100 and 500 ADU.
+        Overlay vertical reference lines at ``signal_range_markers_adu``.
         Default *True*.
+    signal_range_markers_adu : tuple of float, optional
+        ADU positions of the two vertical reference lines drawn when
+        *show_signal_ranges* is *True*. Default ``(100.0, 500.0)`` — pick
+        values appropriate to this sensor's actual signal range (e.g. its
+        read-noise floor and a representative mid-range signal) rather than
+        relying on the default, which was tuned for a specific instrument.
     **kwargs
         Additional layout keywords forwarded to
         :func:`._helpers._parse_plot_kwargs`.
@@ -156,21 +163,22 @@ def plot_variance_ratio(
 
     vertical_lines: list[dict[str, Any]] = []
     if show_signal_ranges:
+        marker_low, marker_high = signal_range_markers_adu
         vertical_lines += [
             {
-                "x":          100.0,
+                "x":          marker_low,
                 "color":      "gray",
                 "linestyle":  ":",
                 "alpha":      0.7,
-                "label":      "100 ADU",
+                "label":      f"{marker_low:g} ADU",
                 "show_value": False,
             },
             {
-                "x":          500.0,
+                "x":          marker_high,
                 "color":      "gray",
                 "linestyle":  "--",
                 "alpha":      0.7,
-                "label":      "500 ADU",
+                "label":      f"{marker_high:g} ADU",
                 "show_value": False,
             },
         ]

@@ -191,6 +191,9 @@ def plot_superbias_image(
             "y":      data,
             "cmap":   "viridis",
             "aspect": "auto",
+            # The plot-level colorbar below is authoritative.  Suppress the
+            # PlotGenerator's per-dataset default to avoid two colorbars.
+            "colorbar": False,
             "vmin":   vmin,
             "vmax":   vmax,
         }
@@ -296,6 +299,7 @@ def plot_deviation_map(
             "y":      deviation_data,
             "cmap":   "RdBu_r",
             "aspect": "auto",
+            "colorbar": False,
             "vmin":   vmin,
             "vmax":   vmax,
         }
@@ -379,6 +383,7 @@ def plot_2d_histogram(
             "y":      data_downsampled,
             "cmap":   "viridis",
             "aspect": "auto",
+            "colorbar": False,
         }
     ]
     colorbar_config: dict[str, Any] = {

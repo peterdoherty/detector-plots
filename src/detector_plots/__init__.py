@@ -25,6 +25,11 @@ from .plot_cte import (
     plot_transfer_fraction_vs_signal,
     plot_corrected_cti_comparison,
 )
+from .plot_stability import (
+    plot_stability_time_series,
+    plot_allan_deviation,
+    plot_stability_tile_map,
+)
 
 __all__ = [
     "PlotGenerator",
@@ -43,6 +48,8 @@ __all__ = [
     "plot_exponential_profile_fit",
     "plot_transfer_fraction_vs_signal",
     "plot_corrected_cti_comparison",
+    "plot_stability_time_series", "plot_allan_deviation",
+    "plot_stability_tile_map",
 ]
 
 
